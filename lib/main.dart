@@ -1,6 +1,6 @@
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'chat.dart'; // Import the ChatScreen
+import 'spacecraft_page.dart';
 
 void main() {
   runApp(const VoyagerNet());
@@ -12,185 +12,148 @@ class VoyagerNet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Voyager Net',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const SpacecraftPage(),
+      title: 'VoyagerNet',
+      theme: ThemeData.dark(),
+      home: const LoginPage(),
     );
   }
 }
 
-class SpacecraftPage extends StatefulWidget {
-  const SpacecraftPage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  SpacecraftPageState createState() => SpacecraftPageState();
+  _LoginPageState createState() => _LoginPageState();
 }
 
-class SpacecraftPageState extends State<SpacecraftPage> {
-  int _currentIndex = 0;
-  double _rotationX = 0.0; // Rotation around the X-axis
-  double _rotationY = 0.0; // Rotation around the Y-axis
-  Offset _spacecraftPosition = const Offset(0.6, 0.2); // Spacecraft position in orbit
-  double _spacecraftRotation = 0.0; // Spacecraft rotation
-  late Timer _timer;
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _domainController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
+  void _login() {
+    final username = _usernameController.text;
+    final password = _passwordController.text;
+    final domain = _domainController.text;
 
-    // Simulate position updates (to be replaced with server data)
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        // Update spacecraft position (example: move in orbit)
-        double angle = timer.tick * pi / 30; // Orbit step
-        _spacecraftPosition = Offset(0.5 + 0.3 * cos(angle), 0.5 + 0.3 * sin(angle));
-        // Rotate spacecraft
-        _spacecraftRotation += 0.1; // Example rotation increment
-      });
-    });
-
-    // Placeholder for server integration
-    _startServerUpdates();
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  void _startServerUpdates() {
-    // TODO: Implement server data fetching and update the spacecraft's velocity, rotation, and position
-  }
-
-  void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  }
-
-  void _rotateSpacecraft(double angleDelta) {
-    setState(() {
-      _spacecraftRotation += angleDelta;
-    });
+    if (username.isNotEmpty && password.isNotEmpty && domain.isNotEmpty) {
+      // Navigate to ChatScreen on successful login
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ChatScreen()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill out all fields')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isDesktop = MediaQuery.of(context).size.width > 600;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voyager Net'),
-      ),
-      body: _currentIndex == 0 ? _buildMainControl() : const Placeholder(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.rocket), label: 'Control'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-        ],
+      body: Center(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo with rounded corners and larger size
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    'lib/VoyagerNet.png',
+                    height: isDesktop ? 180 : 120, // Larger for desktop
+                    width: isDesktop ? 180 : 120, // Maintain aspect ratio
+                  ),
+                ),
+                const SizedBox(height: 40),
+                // Username field
+                _buildTextField(
+                  controller: _usernameController,
+                  labelText: 'Username',
+                  icon: Icons.person,
+                  isDesktop: isDesktop,
+                ),
+                const SizedBox(height: 20),
+                // Password field
+                _buildTextField(
+                  controller: _passwordController,
+                  labelText: 'Password',
+                  icon: Icons.lock,
+                  obscureText: true,
+                  isDesktop: isDesktop,
+                ),
+                const SizedBox(height: 20),
+                // Domain field
+                _buildTextField(
+                  controller: _domainController,
+                  labelText: 'Domain',
+                  icon: Icons.web,
+                  isDesktop: isDesktop,
+                ),
+                const SizedBox(height: 40),
+                // Login button
+                ElevatedButton(
+                  onPressed: _login,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 50, vertical: 15),
+                    backgroundColor: Colors.amber.shade700,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: const Text(
+                    'Login',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildMainControl() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        // Earth and spacecraft
-        Expanded(
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                _rotationX += details.delta.dy * 0.01;
-                _rotationY += details.delta.dx * 0.01;
-              });
-            },
-            child: Center(
-              child: Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..rotateX(_rotationX)
-                  ..rotateY(_rotationY),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Earth image
-                    Image.network(
-                      'https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIzLTA5L3JtNjUzYmF0Y2gyLWVsZW1lbnQtMTEyYS10cmF2ZWxfMS5wbmc.png',
-                      height: 200,
-                      width: 200,
-                    ),
-                    // Spacecraft image
-                    Positioned(
-                      left: _spacecraftPosition.dx * 200 - 25,
-                      top: _spacecraftPosition.dy * 200 - 25,
-                      child: Transform.rotate(
-                        angle: _spacecraftRotation,
-                        child: Image.network(
-                          'https://www.citypng.com/public/uploads/preview/cartoon-flight-spaceship-rocket-clipart-735811696949072cgzl3oyowp.png',
-                          height: 50,
-                          width: 50,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData icon,
+    bool obscureText = false,
+    required bool isDesktop,
+  }) {
+    return SizedBox(
+      width: isDesktop ? MediaQuery.of(context).size.width * 0.4 : double.infinity,
+      height: 40,
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.black54,
+          labelText: labelText,
+          labelStyle: const TextStyle(color: Colors.white70),
+          prefixIcon: Icon(icon, color: Colors.amber.shade700),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: const BorderSide(color: Colors.transparent),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20.0),
+            borderSide: const BorderSide(color: Colors.amber),
           ),
         ),
-        // Control panel
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_upward),
-                    onPressed: () => print('Thrust Up'),
-                  ),
-                  const SizedBox(width: 50),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_downward),
-                    onPressed: () => print('Thrust Down'),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => print('Thrust Left'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward),
-                    onPressed: () => print('Thrust Right'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              // Rotation controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.rotate_left),
-                    onPressed: () => _rotateSpacecraft(-0.1),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.rotate_right),
-                    onPressed: () => _rotateSpacecraft(0.1),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

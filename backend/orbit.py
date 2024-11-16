@@ -1,5 +1,6 @@
 import pygame
 import math
+import time
 
 # Initialize the pygame library
 pygame.init()
@@ -19,24 +20,6 @@ BLACK = (0, 0, 0)
 # Set up font for displaying text
 FONT = pygame.font.SysFont("comicsans", 20)
 
-class Button:
-    def __init__(self, x, y, width, height, text, color=LIGHT_BLUE):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.text = text
-        self.color = color
-
-    def draw(self, win):
-        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height))
-        text = FONT.render(self.text, True, BLACK)
-        win.blit(text, (self.x + (self.width - text.get_width()) // 2, self.y + (self.height - text.get_height()) // 2))
-
-    def is_clicked(self, pos):
-        return self.x <= pos[0] <= self.x + self.width and self.y <= pos[1] <= self.y + self.height
-
-
 class Planet:
     AU = 149.6e6 * 1000  # Astronomical Unit in meters
     G = 6.67428e-11      # Gravitational constant
@@ -50,41 +33,30 @@ class Planet:
         self.color = color
         self.mass = mass
 
-        self.orbit = []
+        self.orbit = []  # Store tuples of (x, y, timestamp)
         self.sun = False
         self.distance_to_sun = 0
 
         self.x_vel = 0
         self.y_vel = 0
-        self.angle = 0  # Initial orientation angle
 
     def draw(self, win):
         x = self.x * self.SCALE + WIDTH / 2
         y = self.y * self.SCALE + HEIGHT / 2
 
-        # Draw the orbit path in white
-        if len(self.orbit) > 2:
+        # Draw the orbit path with fading effect
+        current_time = time.time()
+        faded_orbit = [(px, py) for px, py, timestamp in self.orbit if current_time - timestamp <= 2]
+
+        if len(faded_orbit) > 2:
             updated_points = [
                 (point[0] * self.SCALE + WIDTH / 2, point[1] * self.SCALE + HEIGHT / 2)
-                for point in self.orbit
+                for point in faded_orbit
             ]
             pygame.draw.lines(win, WHITE, False, updated_points, 2)
 
-        # Rotate the square around its center
-        half_size = self.size // 2
-        corners = [
-            (-half_size, -half_size),
-            (half_size, -half_size),
-            (half_size, half_size),
-            (-half_size, half_size)
-        ]
-        rotated_corners = []
-        for corner in corners:
-            rotated_x = corner[0] * math.cos(self.angle) - corner[1] * math.sin(self.angle)
-            rotated_y = corner[0] * math.sin(self.angle) + corner[1] * math.cos(self.angle)
-            rotated_corners.append((rotated_x + x, rotated_y + y))
-
-        pygame.draw.polygon(win, self.color, rotated_corners)
+        # Draw the planet itself
+        pygame.draw.circle(win, self.color, (int(x), int(y)), self.size)
 
     def attraction(self, other):
         other_x, other_y = other.x, other.y
@@ -102,7 +74,7 @@ class Planet:
 
         return force_x, force_y
 
-    def update_position(self, planets, thrust=0, thrust_speed=50):
+    def update_position(self, planets, angular_velocity):
         total_fx = total_fy = 0
 
         for planet in planets:
@@ -112,20 +84,19 @@ class Planet:
             total_fx += fx
             total_fy += fy
 
-        # Apply thrust in the direction of the bottom side of the square
-        if thrust == 1:
-            self.x_vel += math.cos(self.angle + math.pi / 2) * thrust_speed
-            self.y_vel += math.sin(self.angle + math.pi / 2) * thrust_speed
-
-        # Update velocities based on gravitational forces
+        # Update velocity from gravitational forces
         self.x_vel += total_fx / self.mass * self.TIMESTEP
         self.y_vel += total_fy / self.mass * self.TIMESTEP
 
-        # Update position based on velocities
-        self.x += self.x_vel * self.TIMESTEP
-        self.y += self.y_vel * self.TIMESTEP
+        # Update position based on angular velocity for constant 10-second rotation
+        theta = math.atan2(self.y, self.x) + angular_velocity * self.TIMESTEP
+        radius = self.distance_to_sun
 
-        self.orbit.append((self.x, self.y))
+        self.x = radius * math.cos(theta)
+        self.y = radius * math.sin(theta)
+
+        # Add position to orbit with timestamp
+        self.orbit.append((self.x, self.y, time.time()))
 
 
 def main():
@@ -136,45 +107,26 @@ def main():
     sun = Planet(0, 0, 30, YELLOW, 1.98892 * 10**30)
     sun.sun = True
 
-    mercury = Planet(0.387 * Planet.AU, 0, 20, DARK_GREY, 3.30 * 10**23)
+    mercury = Planet(0.387 * Planet.AU, 0, 8, DARK_GREY, 3.30 * 10**23)
     mercury.y_vel = -47.4 * 1000
 
     planets = [sun, mercury]
-    thrust = 0  # Initially no thrust
-    thrust_speed = 50  # Reduced thrust speed to keep the planet visible
 
-    # Buttons to change orientation
-    left_button = Button(50, HEIGHT - 100, 100, 50, "Turn Left")
-    right_button = Button(200, HEIGHT - 100, 100, 50, "Turn Right")
+    # Angular velocity for 1 full rotation in 10 seconds
+    angular_velocity = 2 * math.pi / (10 * 60 * 60 * 24)  # radians per second in simulation time
 
     while run:
         clock.tick(60)
-        WIN.fill((0, 0, 0))
-
-        # Draw buttons
-        left_button.draw(WIN)
-        right_button.draw(WIN)
+        WIN.fill(BLACK)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if left_button.is_clicked(pygame.mouse.get_pos()):
-                    mercury.angle -= math.radians(10)  # Turn left
-                elif right_button.is_clicked(pygame.mouse.get_pos()):
-                    mercury.angle += math.radians(10)  # Turn right
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:  # Toggle thrust
-                    thrust = 1 if thrust == 0 else 0
 
         for planet in planets:
             if not planet.sun:
-                planet.update_position(planets, thrust, thrust_speed)
+                planet.update_position(planets, angular_velocity)
             planet.draw(WIN)
-
-        # Display thrust state
-        thrust_text = FONT.render(f"Thrust: {'ON' if thrust else 'OFF'}", 1, WHITE)
-        WIN.blit(thrust_text, (10, 10))
 
         pygame.display.update()
 

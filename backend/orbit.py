@@ -133,13 +133,13 @@ def main():
     clock = pygame.time.Clock()
 
     # Create the Sun and Earth
-    earth = Planet(0, 0, 30, YELLOW, 1.98892 * 10**30)
-    earth.sun = True
+    sun = Planet(0, 0, 30, YELLOW, 1.98892 * 10**30)
+    sun.sun = True
 
-    spacecraft = Planet(0.387 * Planet.AU, 0, 8, DARK_GREY, 3.30 * 10**23)
-    spacecraft.y_vel = 29.783 * 1000 
+    earth = Planet(0.387 * Planet.AU, 0, 8, DARK_GREY, 3.30 * 10**23)
+    earth.y_vel = 29.783 * 1000 
 
-    planets = [earth, spacecraft]
+    planets = [sun, earth]
     thrust = 0  # Initially no thrust
     thrust_speed = 50  # Reduced thrust speed to keep the planet visible
     angle_input = ""  # Input buffer for angle input
@@ -155,7 +155,7 @@ def main():
                 if event.key == pygame.K_RETURN and angle_input:
                     try:
                         # Update the angle based on input
-                        spacecraft.angle = math.radians(float(angle_input))
+                        earth.angle = math.radians(float(angle_input))
                         angle_input = ""  # Clear input buffer
                     except ValueError:
                         pass

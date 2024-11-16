@@ -31,19 +31,26 @@ class SpacecraftPageState extends State<SpacecraftPage> {
   double _rotationX = 0.0; // Rotation around the X-axis
   double _rotationY = 0.0; // Rotation around the Y-axis
   Offset _spacecraftPosition = const Offset(0.6, 0.2); // Spacecraft position in orbit
+  double _spacecraftRotation = 0.0; // Spacecraft rotation
   late Timer _timer;
 
   @override
   void initState() {
     super.initState();
-    // Simulate position updates
+
+    // Simulate position updates (to be replaced with server data)
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         // Update spacecraft position (example: move in orbit)
         double angle = timer.tick * pi / 30; // Orbit step
         _spacecraftPosition = Offset(0.5 + 0.3 * cos(angle), 0.5 + 0.3 * sin(angle));
+        // Rotate spacecraft
+        _spacecraftRotation += 0.1; // Example rotation increment
       });
     });
+
+    // Placeholder for server integration
+    _startServerUpdates();
   }
 
   @override
@@ -52,9 +59,19 @@ class SpacecraftPageState extends State<SpacecraftPage> {
     super.dispose();
   }
 
+  void _startServerUpdates() {
+    // TODO: Implement server data fetching and update the spacecraft's velocity, rotation, and position
+  }
+
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
+    });
+  }
+
+  void _rotateSpacecraft(double angleDelta) {
+    setState(() {
+      _spacecraftRotation += angleDelta;
     });
   }
 
@@ -62,14 +79,14 @@ class SpacecraftPageState extends State<SpacecraftPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Control'),
+        title: const Text('Voyager Net'),
       ),
       body: _currentIndex == 0 ? _buildMainControl() : const Placeholder(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Main'),
+          BottomNavigationBarItem(icon: Icon(Icons.rocket), label: 'Control'),
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
         ],
       ),
@@ -108,10 +125,13 @@ class SpacecraftPageState extends State<SpacecraftPage> {
                     Positioned(
                       left: _spacecraftPosition.dx * 200 - 25,
                       top: _spacecraftPosition.dy * 200 - 25,
-                      child: Image.network(
-                        'https://www.citypng.com/public/uploads/preview/cartoon-flight-spaceship-rocket-clipart-735811696949072cgzl3oyowp.png',
-                        height: 50,
-                        width: 50,
+                      child: Transform.rotate(
+                        angle: _spacecraftRotation,
+                        child: Image.network(
+                          'https://www.citypng.com/public/uploads/preview/cartoon-flight-spaceship-rocket-clipart-735811696949072cgzl3oyowp.png',
+                          height: 50,
+                          width: 50,
+                        ),
                       ),
                     ),
                   ],
@@ -149,6 +169,21 @@ class SpacecraftPageState extends State<SpacecraftPage> {
                   IconButton(
                     icon: const Icon(Icons.arrow_forward),
                     onPressed: () => print('Thrust Right'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Rotation controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.rotate_left),
+                    onPressed: () => _rotateSpacecraft(-0.1),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.rotate_right),
+                    onPressed: () => _rotateSpacecraft(0.1),
                   ),
                 ],
               ),

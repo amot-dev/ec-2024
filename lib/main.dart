@@ -40,7 +40,7 @@ class _LoginPageState extends State<LoginPage> {
       // Navigate to ChatScreen on successful login
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const ChatScreen()),
+        MaterialPageRoute(builder: (context) => const SpacecraftPage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

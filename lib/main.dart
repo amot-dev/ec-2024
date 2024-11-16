@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'chat.dart'; // Import the ChatScreen
-import 'spacecraft.dart';
+import 'spacecraft_page.dart';
 
 void main() {
   runApp(const VoyagerNet());

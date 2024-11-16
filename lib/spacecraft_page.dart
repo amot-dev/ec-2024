@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
+
 import 'package:voyager_net/chat.dart';
+import 'package:voyager_net/navigation_server.dart';
+import 'package:voyager_net/spacecraft.dart';
 
 class SpacecraftPage extends StatefulWidget {
   const SpacecraftPage({super.key});
@@ -11,30 +13,35 @@ class SpacecraftPage extends StatefulWidget {
 }
 
 class SpacecraftPageState extends State<SpacecraftPage> {
+  Spacecraft spacecraft = Spacecraft(
+    Offset(0,0),
+    0,
+    0,
+  );
+  int thrustPercent = 0;
   int _currentIndex = 0;
-  double _rotationX = 0.0; // Rotation around the X-axis
-  double _rotationY = 0.0; // Rotation around the Y-axis
-  Offset _spacecraftPosition = const Offset(0.6, 0.2); // Spacecraft position in orbit
-  double _spacecraftRotation = 0.0; // Spacecraft rotation
   late Timer _timer;
+
+  void fetchAndUpdate() async {
+    try {
+      final fetchedData = await Server.fetchUpdate();
+      setState(() {
+        spacecraft = fetchedData;
+      });
+    }
+    catch (e) {
+      print("Error fetching update: $e");
+    }
+  }
 
   @override
   void initState() {
     super.initState();
 
-    // Simulate position updates (to be replaced with server data)
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        // Update spacecraft position (example: move in orbit)
-        double angle = timer.tick * pi / 30; // Orbit step
-        _spacecraftPosition = Offset(0.5 + 0.3 * cos(angle), 0.5 + 0.3 * sin(angle));
-        // Rotate spacecraft
-        _spacecraftRotation += 0.1; // Example rotation increment
-      });
+    // Fetch updates every 100ms
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      fetchAndUpdate();
     });
-
-    // Placeholder for server integration
-    _startServerUpdates();
   }
 
   @override
@@ -43,19 +50,9 @@ class SpacecraftPageState extends State<SpacecraftPage> {
     super.dispose();
   }
 
-  void _startServerUpdates() {
-    // TODO: Implement server data fetching and update the spacecraft's velocity, rotation, and position
-  }
-
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
-    });
-  }
-
-  void _rotateSpacecraft(double angleDelta) {
-    setState(() {
-      _spacecraftRotation += angleDelta;
     });
   }
 
@@ -83,45 +80,33 @@ class SpacecraftPageState extends State<SpacecraftPage> {
       children: [
         // Earth and spacecraft
         Expanded(
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                _rotationX += details.delta.dy * 0.01;
-                _rotationY += details.delta.dx * 0.01;
-              });
-            },
-            child: Center(
-              child: Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..rotateX(_rotationX)
-                  ..rotateY(_rotationY),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Earth image
-                    Image.network(
-                      'https://images.rawpixel.com/image_png_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIzLTA5L3JtNjUzYmF0Y2gyLWVsZW1lbnQtMTEyYS10cmF2ZWxfMS5wbmc.png',
-                      height: 200,
-                      width: 200,
-                    ),
-                    // Spacecraft image
-                    Positioned(
-                      left: _spacecraftPosition.dx * 200 - 25,
-                      top: _spacecraftPosition.dy * 200 - 25,
-                      child: Transform.rotate(
-                        angle: _spacecraftRotation,
-                        child: Image.network(
-                          'https://www.citypng.com/public/uploads/preview/cartoon-flight-spaceship-rocket-clipart-735811696949072cgzl3oyowp.png',
-                          height: 50,
-                          width: 50,
-                        ),
-                      ),
-                    ),
-                  ],
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Earth Image
+              Positioned(
+                left: (MediaQuery.of(context).size.width / 2) - 100,
+                top: (MediaQuery.of(context).size.height / 2) - 100,
+                child: Image.asset(
+                    'lib/earth.png',
+                    height: 200,
+                    width: 200,
+                  ),
+              ),
+              // Spacecraft image
+              Positioned(
+                left: (MediaQuery.of(context).size.width / 2) - 25 + spacecraft.coordinates.dx,
+                top: (MediaQuery.of(context).size.height / 2) - 25 + spacecraft.coordinates.dy,
+                child: Transform.rotate(
+                  angle: 3.141519/180 * spacecraft.rotation,
+                  child: Image.asset(
+                    'lib/rocket.png',
+                    height: 50,
+                    width: 50,
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
         // Control panel
@@ -129,45 +114,34 @@ class SpacecraftPageState extends State<SpacecraftPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Column(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_upward),
-                    onPressed: () => print('Thrust Up'),
-                  ),
-                  const SizedBox(width: 50),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_downward),
-                    onPressed: () => print('Thrust Down'),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => print('Thrust Left'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward),
-                    onPressed: () => print('Thrust Right'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
               // Rotation controls
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.rotate_left),
-                    onPressed: () => _rotateSpacecraft(-0.1),
+                    onPressed: () => Server.setRotation(-5), // Rotate left
+                  ),
+                  // Thrust control as a slider between the rotate buttons
+                  SizedBox(
+                    width: 200,
+                    child: Slider(
+                      value: thrustPercent.toDouble(),
+                      min: 0,
+                      max: 100,
+                      divisions: 100,
+                      label: '$thrustPercent%',
+                      onChanged: (double value) {
+                        setState(() {
+                          thrustPercent = value.toInt();
+                        });
+                        Server.setThrust(thrustPercent); // Update thrust when slider is moved
+                      },
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.rotate_right),
-                    onPressed: () => _rotateSpacecraft(0.1),
+                    onPressed: () => Server.setRotation(5), // Rotate right
                   ),
                 ],
               ),

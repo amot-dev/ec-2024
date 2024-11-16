@@ -1,152 +1,98 @@
-from flask import Flask, request, jsonify
 import threading
-import time
 import math
+import time
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
-
-# Constants for the simulation
-TIME_STEP = 0.1  # Time step for simulation updates (seconds)
-
-class Planet:
-    AU = 149.6e6 * 1000  # Astronomical Unit in meters
-    G = 6.67428e-11      # Gravitational constant
-    TIMESTEP = TIME_STEP  # Time step for the simulation
-
-    def __init__(self, x, y, size, color, mass):
-        self.x = x
-        self.y = y
-        self.size = size
-        self.color = color
-        self.mass = mass
-        self.orbit = []
-        self.sun = False
-        self.distance_to_sun = 0
-        self.x_vel = 0.0
-        self.y_vel = 0.0
-        self.angle = 0.0  # Orientation angle of the spacecraft
-
-    def attraction(self, other):
-        """
-        Calculate the gravitational force between this object and another.
-        """
-        distance_x = other.x - self.x
-        distance_y = other.y - self.y
-        distance = math.sqrt(distance_x**2 + distance_y**2)
-
-        if other.sun:
-            self.distance_to_sun = distance
-
-        force = self.G * self.mass * other.mass / (distance**2)
-        theta = math.atan2(distance_y, distance_x)
-        force_x = math.cos(theta) * force
-        force_y = math.sin(theta) * force
-
-        return force_x, force_y
-
-    def update_position(self, planets, thrust=0, thrust_speed=50):
-        """
-        Update the position of the planet based on gravitational forces and thrust.
-        """
-        total_fx = total_fy = 0.0
-
-        # Calculate gravitational forces
-        for planet in planets:
-            if self == planet:
-                continue
-            fx, fy = self.attraction(planet)
-            total_fx += fx
-            total_fy += fy
-
-        # Apply thrust in the direction of the spacecraft's orientation
-        if thrust == 1:
-            self.x_vel += math.cos(self.angle + math.pi / 2) * thrust_speed
-            self.y_vel += math.sin(self.angle + math.pi / 2) * thrust_speed
-
-        # Update velocities based on gravitational forces
-        self.x_vel += total_fx / self.mass * self.TIMESTEP
-        self.y_vel += total_fy / self.mass * self.TIMESTEP
-
-        # Update position based on velocities
-        self.x += self.x_vel * self.TIMESTEP
-        self.y += self.y_vel * self.TIMESTEP
-
-        # Update orbit for visualization or tracking
-        self.orbit.append((self.x, self.y))
-
-
-# Create Earth (central body) and spacecraft
-earth = Planet(0, 0, 30, (255, 255, 0), 5.972 * 10**24)  # Earth
-earth.sun = True
-
-spacecraft = Planet(300.0, 0.0, 8, (100, 149, 237), 1000.0)  # Spacecraft
-spacecraft.y_vel = 30.0  # Initial velocity to simulate orbital motion
-
-# List of celestial objects
-planets = [earth, spacecraft]
+CORS(app)
 
 # Lock for thread-safe updates
 state_lock = threading.Lock()
 
-# Variables to control thrust
-thrust = 0
-thrust_speed = 50
+# Constants for the simulation
+GRAVITATIONAL_CONSTANT = 500.0  # Gravitational constant
+BODY_MASS = 5000.0  # Mass of the central body
+TIME_STEP = 0.05  # Small time step for smooth updates (seconds)
+TIME_DILATION = 1  # Time dilation factor (0.1 = 10x slower)
 
+# Maximum thrust in terms of force (arbitrary units, modify as needed)
+MAX_THRUST = 10.0  # Max possible thrust force the rocket can apply
+
+# Rocket state
+rocket = {
+    "x": 400.0,  # Initial x position (just outside the planet's radius)
+    "y": 0.0,  # Initial y position
+    "vx": 0.0,  # Initial velocity in x
+    "vy": 50.0,  # Initial velocity in y (orbit speed)
+    "rotation": 0.0,  # Initial rotation angle (degrees, 0 is +x direction)
+    "thrust_percent": 0.0,  # Thrust as a percentage (0-100) sent by client
+}
 
 def update_simulation():
-    """
-    Continuously updates the spacecraft's position and velocity.
-    """
-    global thrust, thrust_speed
+    """Continuously updates the rocket's position and velocity."""
     while True:
         with state_lock:
-            spacecraft.update_position(planets, thrust, thrust_speed)
-        time.sleep(TIME_STEP)
-
+            # Apply time dilation factor for slow motion
+            effective_time_step = TIME_STEP * TIME_DILATION
+            
+            # Calculate distance and gravitational force
+            distance = math.sqrt(rocket["x"] ** 2 + rocket["y"] ** 2)
+            force_gravity = GRAVITATIONAL_CONSTANT * BODY_MASS / distance**2
+            acceleration_gravity = force_gravity / 1.0  # Assume rocket mass = 1.0
+            
+            # Calculate gravitational acceleration components
+            ax_gravity = -acceleration_gravity * (rocket["x"] / distance)
+            ay_gravity = -acceleration_gravity * (rocket["y"] / distance)
+            
+            # Calculate thrust force based on percentage
+            thrust_force = (rocket["thrust_percent"] / 100.0) * MAX_THRUST  # Thrust as a fraction of MAX_THRUST
+            ax_thrust = thrust_force * math.cos(math.radians(rocket["rotation"]))
+            ay_thrust = thrust_force * math.sin(math.radians(rocket["rotation"]))
+            
+            # Update velocity
+            rocket["vx"] += (ax_gravity + ax_thrust) * effective_time_step
+            rocket["vy"] += (ay_gravity + ay_thrust) * effective_time_step
+            
+            # Update position
+            rocket["x"] += rocket["vx"] * effective_time_step
+            rocket["y"] += rocket["vy"] * effective_time_step
+        
+        time.sleep(TIME_STEP)  # This controls the update frequency
 
 @app.route('/get', methods=['GET'])
 def get_state():
-    """
-    Returns the current state of the spacecraft.
-    """
+    """Returns the current state of the rocket."""
     with state_lock:
-        orbital_velocity = math.sqrt(spacecraft.x_vel**2 + spacecraft.y_vel**2)
+        # Calculate orbital velocity
+        orbital_velocity = math.sqrt(rocket["vx"]**2 + rocket["vy"]**2)
         return jsonify({
-            "position": {"x": spacecraft.x, "y": spacecraft.y},
-            "rotation": spacecraft.angle,
-            "velocity": {"x": spacecraft.x_vel, "y": spacecraft.y_vel},
+            "position": {"x": rocket["x"], "y": rocket["y"]},
+            "rotation": rocket["rotation"],
             "orbital_velocity": orbital_velocity,
-            "distance_to_earth": spacecraft.distance_to_sun
+            "thrust_percent": rocket["thrust_percent"]  # Return the thrust percentage
         })
-
 
 @app.route('/set_rotation', methods=['POST'])
 def set_rotation():
-    """
-    Sets the spacecraft's rotation angle.
-    """
+    """Sets the rocket's rotation."""
     data = request.json
     if "rotation" in data:
         with state_lock:
-            spacecraft.angle = math.radians(data["rotation"])
-        return jsonify({"status": "success", "rotation": data["rotation"]})
+            rocket["rotation"] += data["rotation"]
+        return jsonify({"status": "success", "rotation": rocket["rotation"]})
     return jsonify({"status": "error", "message": "Rotation value missing"}), 400
-
 
 @app.route('/set_thrust', methods=['POST'])
 def set_thrust():
-    """
-    Sets the spacecraft's thrust level.
-    """
+    """Sets the rocket's thrust (percentage of maximum thrust)."""
     data = request.json
-    if "thrust" in data:
+    if "thrust_percent" in data:
         with state_lock:
-            # Clamp thrust to 0 or 1
-            global thrust
-            thrust = max(0, min(1, data["thrust"]))
-        return jsonify({"status": "success", "thrust": thrust})
-    return jsonify({"status": "error", "message": "Thrust value missing"}), 400
-
+            # Ensure thrust percent is between 0 and 100
+            rocket["thrust_percent"] = max(0, min(100, data["thrust_percent"]))
+        return jsonify({"status": "success", "thrust_percent": rocket["thrust_percent"]})
+    return jsonify({"status": "error", "message": "Thrust percentage missing"}), 400
 
 if __name__ == "__main__":
     # Start the simulation in a background thread
@@ -154,4 +100,4 @@ if __name__ == "__main__":
     simulation_thread.start()
 
     # Start the Flask server
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)

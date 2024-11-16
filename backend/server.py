@@ -1,54 +1,77 @@
 from flask import Flask, request, jsonify
+from orbit import Planet  # Import your Planet class
+import threading
 
 app = Flask(__name__)
 
-# Initial spacecraft data
-spacecraft_data = {
-    "position": [0.0, 0.0, 0.0],  # X, Y, Z
-    "angle": [0.0, 0.0, 0.0],     # Pitch, Yaw, Roll
-    "velocity": [0.0, 0.0, 0.0]   # VX, VY, VZ
-}
+# Create the Earth and Spacecraft as Planet objects
+earth = Body(0, 0, 30, (255, 255, 0), 5.972 * 10**24)  # Earth
+earth.sun = True  # Earth acts as the central gravitational body
 
-@app.route('/')
-def home():
-    """
-    Endpoint for the root URL.
-    """
-    return jsonify({
-        "message": "Welcome to the Spacecraft Communication API!",
-        "endpoints": {
-            "/get": "GET current spacecraft data",
-            "/update": "POST to update spacecraft data"
-        }
-    }), 200
+spacecraft = Body(0.387 * Body.AU, 0, 8, (100, 149, 237), 500)  # Spacecraft
+spacecraft.y_vel = 29.783 * 1000  # Initial velocity for orbital motion
+
+# List of all celestial objects
+planets = [earth, spacecraft]
+
+# Thrust and angle values to be updated via Flask
+thrust = 0
+thrust_speed = 50
+
 
 @app.route('/update', methods=['POST'])
-def update_data():
+def update():
     """
-    Endpoint to update spacecraft data.
-    Request body example:
-    {
-        "position": [1.0, 2.0, 3.0],
-        "angle": [10.0, 20.0, 30.0],
-        "velocity": [5.0, 5.0, 5.0]
-    }
+    Update the thrust and angle for the spacecraft.
     """
-    data = request.json
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+    global thrust
 
-    for key in ['position', 'angle', 'velocity']:
-        if key in data:
-            spacecraft_data[key] = data[key]
+    data = request.get_json()
 
-    return jsonify({"message": "Spacecraft data updated successfully", "data": spacecraft_data}), 200
+    if "angle" in data:
+        try:
+            # Update spacecraft's angle in radians
+            spacecraft.angle = float(data["angle"])
+        except ValueError:
+            return jsonify({"error": "Invalid angle value"}), 400
+
+    if "thrust" in data:
+        try:
+            # Update spacecraft's angle in radians
+            spacecraft.thrust = float(data["thrust"])
+        except ValueError:
+            return jsonify({"error": "Invalid angle value"}), 400
+
+    return jsonify({"message": "Update successful"})
+
 
 @app.route('/get', methods=['GET'])
 def get_data():
     """
-    Endpoint to retrieve the current spacecraft data.
+    Get the current spacecraft data.
     """
-    return jsonify(spacecraft_data), 200
+    return jsonify({
+        "angle": spacecraft.angle,
+        "x": spacecraft.x,
+        "y": spacecraft.y,
+        "x_vel": spacecraft.x_vel,
+        "y_vel": spacecraft.y_vel,
+        "distance_to_earth": spacecraft.distance_to_sun
+    })
+
+
+def simulation_loop():
+    """
+    Continuous simulation loop to update the spacecraft's position.
+    """
+    global thrust, thrust_speed
+
+    while True:
+        spacecraft.update_position(planets, thrust, thrust_speed)
+
 
 if __name__ == '__main__':
+    # Run the simulation loop in a separate thread
+    simulation_thread = threading.Thread(target=simulation_loop, daemon=True)
+    simulation_thread.start()
     app.run(host='0.0.0.0', port=5000, debug=True)

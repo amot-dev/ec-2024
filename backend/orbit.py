@@ -1,6 +1,5 @@
 import pygame
 import math
-import time
 
 # Initialize the pygame library
 pygame.init()
@@ -20,11 +19,29 @@ BLACK = (0, 0, 0)
 # Set up font for displaying text
 FONT = pygame.font.SysFont("comicsans", 20)
 
+class Button:
+    def __init__(self, x, y, width, height, text, color=LIGHT_BLUE):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.text = text
+        self.color = color
+
+    def draw(self, win):
+        pygame.draw.rect(win, self.color, (self.x, self.y, self.width, self.height))
+        text = FONT.render(self.text, True, BLACK)
+        win.blit(text, (self.x + (self.width - text.get_width()) // 2, self.y + (self.height - text.get_height()) // 2))
+
+    def is_clicked(self, pos):
+        return self.x <= pos[0] <= self.x + self.width and self.y <= pos[1] <= self.y + self.height
+
+
 class Planet:
     AU = 149.6e6 * 1000  # Astronomical Unit in meters
     G = 6.67428e-11      # Gravitational constant
     SCALE = 250 / AU      # Scale for simulation (1 AU = 100 pixels)
-    TIMESTEP = 3600 * 24  # Time step for each update (1 day in seconds)
+    TIMESTEP = 600 * 24  # Time step for each update (1 day in seconds)
 
     def __init__(self, x, y, size, color, mass):
         self.x = x
@@ -33,30 +50,41 @@ class Planet:
         self.color = color
         self.mass = mass
 
-        self.orbit = []  # Store tuples of (x, y, timestamp)
+        self.orbit = []
         self.sun = False
         self.distance_to_sun = 0
 
         self.x_vel = 0
         self.y_vel = 0
+        self.angle = 0  # Initial orientation angle
 
     def draw(self, win):
         x = self.x * self.SCALE + WIDTH / 2
         y = self.y * self.SCALE + HEIGHT / 2
 
-        # Draw the orbit path with fading effect
-        current_time = time.time()
-        faded_orbit = [(px, py) for px, py, timestamp in self.orbit if current_time - timestamp <= 2]
-
-        if len(faded_orbit) > 2:
+        # Draw the orbit path in white
+        if len(self.orbit) > 2:
             updated_points = [
                 (point[0] * self.SCALE + WIDTH / 2, point[1] * self.SCALE + HEIGHT / 2)
-                for point in faded_orbit
+                for point in self.orbit
             ]
             pygame.draw.lines(win, WHITE, False, updated_points, 2)
 
-        # Draw the planet itself
-        pygame.draw.circle(win, self.color, (int(x), int(y)), self.size)
+        # Rotate the square around its center
+        half_size = self.size // 2
+        corners = [
+            (-half_size, -half_size),
+            (half_size, -half_size),
+            (half_size, half_size),
+            (-half_size, half_size)
+        ]
+        rotated_corners = []
+        for corner in corners:
+            rotated_x = corner[0] * math.cos(self.angle) - corner[1] * math.sin(self.angle)
+            rotated_y = corner[0] * math.sin(self.angle) + corner[1] * math.cos(self.angle)
+            rotated_corners.append((rotated_x + x, rotated_y + y))
+
+        pygame.draw.polygon(win, self.color, rotated_corners)
 
     def attraction(self, other):
         other_x, other_y = other.x, other.y
@@ -74,7 +102,7 @@ class Planet:
 
         return force_x, force_y
 
-    def update_position(self, planets, angular_velocity):
+    def update_position(self, planets, thrust=0, thrust_speed=50):
         total_fx = total_fy = 0
 
         for planet in planets:
@@ -84,49 +112,72 @@ class Planet:
             total_fx += fx
             total_fy += fy
 
-        # Update velocity from gravitational forces
+        # Apply thrust in the direction of the bottom side of the square
+        if thrust == 1:
+            self.x_vel += math.cos(self.angle + math.pi / 2) * thrust_speed
+            self.y_vel += math.sin(self.angle + math.pi / 2) * thrust_speed
+
+        # Update velocities based on gravitational forces
         self.x_vel += total_fx / self.mass * self.TIMESTEP
         self.y_vel += total_fy / self.mass * self.TIMESTEP
 
-        # Update position based on angular velocity for constant 10-second rotation
-        theta = math.atan2(self.y, self.x) + angular_velocity * self.TIMESTEP
-        radius = self.distance_to_sun
+        # Update position based on velocities
+        self.x += self.x_vel * self.TIMESTEP
+        self.y += self.y_vel * self.TIMESTEP
 
-        self.x = radius * math.cos(theta)
-        self.y = radius * math.sin(theta)
-
-        # Add position to orbit with timestamp
-        self.orbit.append((self.x, self.y, time.time()))
+        self.orbit.append((self.x, self.y))
 
 
 def main():
     run = True
     clock = pygame.time.Clock()
 
-    # Create the Sun and Mercury
-    sun = Planet(0, 0, 30, YELLOW, 1.98892 * 10**30)
-    sun.sun = True
+    # Create the Sun and Earth
+    earth = Planet(0, 0, 30, YELLOW, 1.98892 * 10**30)
+    earth.sun = True
 
-    mercury = Planet(0.387 * Planet.AU, 0, 8, DARK_GREY, 3.30 * 10**23)
-    mercury.y_vel = -47.4 * 1000
+    spacecraft = Planet(0.387 * Planet.AU, 0, 8, DARK_GREY, 3.30 * 10**23)
+    spacecraft.y_vel = 29.783 * 1000 
 
-    planets = [sun, mercury]
-
-    # Angular velocity for 1 full rotation in 10 seconds
-    angular_velocity = 2 * math.pi / (10 * 60 * 60 * 24)  # radians per second in simulation time
+    planets = [earth, spacecraft]
+    thrust = 0  # Initially no thrust
+    thrust_speed = 50  # Reduced thrust speed to keep the planet visible
+    angle_input = ""  # Input buffer for angle input
 
     while run:
         clock.tick(60)
-        WIN.fill(BLACK)
+        WIN.fill((0, 0, 0))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN and angle_input:
+                    try:
+                        # Update the angle based on input
+                        spacecraft.angle = math.radians(float(angle_input))
+                        angle_input = ""  # Clear input buffer
+                    except ValueError:
+                        pass
+                elif event.key == pygame.K_BACKSPACE:
+                    angle_input = angle_input[:-1]
+                elif event.unicode.isdigit() or event.unicode == ".":
+                    angle_input += event.unicode
+                elif event.key == pygame.K_SPACE:  # Toggle thrust
+                    thrust = 1 if thrust == 0 else 0
 
         for planet in planets:
             if not planet.sun:
-                planet.update_position(planets, angular_velocity)
+                planet.update_position(planets, thrust, thrust_speed)
             planet.draw(WIN)
+
+        # Display thrust state and angle input
+        thrust_text = FONT.render(f"Thrust: {'ON' if thrust else 'OFF'}", 1, WHITE)
+        angle_text = FONT.render(f"Angle (deg): {math.degrees(earth.angle):.2f}", 1, WHITE)
+        input_text = FONT.render(f"Input: {angle_input}", 1, WHITE)
+        WIN.blit(thrust_text, (10, 10))
+        WIN.blit(angle_text, (10, 40))
+        WIN.blit(input_text, (10, 70))
 
         pygame.display.update()
 
